@@ -19,6 +19,7 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
 
     private enum DisplayResolution: Sendable {
         case line(String)
+        case accessibilityPermissionRequired(String)
         case keepCurrentLine
     }
 
@@ -125,7 +126,15 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
     }
 
     private func applyDisplayResolution(_ displayResolution: DisplayResolution) {
-        guard case .line(let resolvedDisplayLine) = displayResolution else {
+        let resolvedDisplayLine: String
+
+        switch displayResolution {
+        case .line(let line):
+            resolvedDisplayLine = line
+        case .accessibilityPermissionRequired(let line):
+            startAccessibilityPermissionMonitoringIfNeeded()
+            resolvedDisplayLine = line
+        case .keepCurrentLine:
             return
         }
 
@@ -194,7 +203,9 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
             return .line(line)
         case .failure(let error):
             switch error {
-            case .permissionRequired, .musicNotRunning:
+            case .permissionRequired:
+                return .accessibilityPermissionRequired(error.localizedDescription)
+            case .musicNotRunning:
                 return .line(error.localizedDescription)
             case .lyricsPanelUnavailable:
                 return .keepCurrentLine

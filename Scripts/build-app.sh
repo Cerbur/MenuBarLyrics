@@ -7,6 +7,7 @@ APP_NAME="MenuBarLyrics"
 APP_DIR="$ROOT_DIR/dist/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
+CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 
 cd "$ROOT_DIR"
 
@@ -28,7 +29,8 @@ cp "$EXECUTABLE" "$MACOS_DIR/$APP_NAME"
 chmod +x "$MACOS_DIR/$APP_NAME"
 
 if command -v codesign >/dev/null 2>&1; then
-	codesign --force --sign - "$APP_DIR" >/dev/null
+	codesign --force --sign "$CODE_SIGN_IDENTITY" "$APP_DIR" >/dev/null
+	echo "Signed with identity: $CODE_SIGN_IDENTITY"
 fi
 
 echo "Built $APP_DIR"

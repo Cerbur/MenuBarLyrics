@@ -29,6 +29,14 @@ Scripts/build-app.sh
 
 生成完成后，Finder 中打开项目的 `dist` 目录，双击 `MenuBarLyrics.app` 即可启动。启动后它会常驻顶部菜单栏，不会出现在 Dock 中。
 
+默认构建会使用 ad-hoc 签名（`codesign --sign -`）。这种签名适合快速本地测试，但每次二进制变化后，macOS 的隐私权限数据库可能会把新构建识别成不同的应用身份，导致辅助功能权限需要删除后重新授权。为了让“辅助功能”授权在多次重新编译后继续有效，请使用稳定的代码签名证书构建：
+
+```bash
+CODE_SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" Scripts/build-app.sh
+```
+
+也可以使用 Keychain 中自己创建并信任的代码签名证书。关键是每次构建使用同一个证书和同一个 `CFBundleIdentifier`（当前为 `dev.yuancheng.MenuBarLyrics`）。
+
 如果 macOS 提示该应用来自未识别开发者，可以在 Finder 中右键点击 `MenuBarLyrics.app`，选择“打开”，再在系统提示中确认打开。首次读取 Music.app 时，macOS 可能会请求“自动化”权限，用于允许 MenuBarLyrics 控制 Music.app 和 System Events。读取 Music.app 歌词面板还需要在“系统设置 > 隐私与安全性 > 辅助功能”中允许 MenuBarLyrics。
 
 ## 从源码启动应用
@@ -40,6 +48,8 @@ swift run
 这会启动 MenuBarLyrics 菜单栏应用。启动后，顶部菜单栏会出现一个音乐图标；如果歌词显示已开启，图标旁会显示当前歌词行。
 
 首次启动时，macOS 可能会请求“自动化”权限，用于允许 MenuBarLyrics 控制 Music.app 和 System Events。没有该权限时，应用无法读取当前播放信息。读取 Music.app 歌词面板还需要辅助功能权限。
+
+如果应用正在运行时完成了辅助功能授权，MenuBarLyrics 会自动检测权限变化并重新读取歌词，不需要手动重启应用。
 
 ## 使用
 
