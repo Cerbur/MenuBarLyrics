@@ -23,11 +23,11 @@ enum MusicLyricsError: LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .musicNotRunning:
-            return "Music.app is not running."
+            return "Music.app 未运行。"
         case .notPlaying:
-            return "Music.app is not playing."
+            return "Music.app 未在播放。"
         case .missingResult:
-            return "Unable to read the current Music.app track."
+            return "无法读取 Music.app 当前歌曲。"
         case .scriptFailure(let message):
             return message
         }
@@ -65,12 +65,12 @@ final class MusicLyricsReader: @unchecked Sendable {
 
         var errorInfo: NSDictionary?
         guard let script = NSAppleScript(source: source) else {
-            return .failure(.scriptFailure("Unable to create AppleScript."))
+            return .failure(.scriptFailure("无法创建 AppleScript。"))
         }
 
         let output = script.executeAndReturnError(&errorInfo)
         if let errorInfo {
-            let message = errorInfo[NSAppleScript.errorMessage] as? String ?? "AppleScript failed."
+            let message = errorInfo[NSAppleScript.errorMessage] as? String ?? "AppleScript 执行失败。"
             return .failure(.scriptFailure(message))
         }
 

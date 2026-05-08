@@ -8,6 +8,7 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
     private var preferencesWindowController: PreferencesWindowController!
     private let musicReader = MusicLyricsReader()
     private let accessibilityLyricsReader = MusicLyricsAccessibilityReader()
+    private let lyricsLineResolver = LyricsLineResolver()
     private let pollingQueue = DispatchQueue(label: "MenuBarLyrics.polling")
     private var timer: Timer?
     private var accessibilityPermissionTimer: Timer?
@@ -51,7 +52,7 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
         preferencesWindowController.delegate = self
         setupStatusItem()
         updateLyricsVisibility()
-        preferencesWindowController.show()
+        showPreferencesOnFirstLaunchIfNeeded()
         accessibilityLyricsReader.requestPermissionIfNeeded()
         startAccessibilityPermissionMonitoringIfNeeded()
         startPolling()
@@ -90,11 +91,13 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
         isRefreshInFlight = true
         let musicReader = musicReader
         let accessibilityLyricsReader = accessibilityLyricsReader
+        let lyricsLineResolver = lyricsLineResolver
 
-        pollingQueue.async { [weak self, musicReader, accessibilityLyricsReader] in
+        pollingQueue.async { [weak self, musicReader, accessibilityLyricsReader, lyricsLineResolver] in
             let displayResolution = Self.resolveDisplayLine(
                 musicReader: musicReader,
-                accessibilityLyricsReader: accessibilityLyricsReader
+                accessibilityLyricsReader: accessibilityLyricsReader,
+                lyricsLineResolver: lyricsLineResolver
             )
 
             DispatchQueue.main.async { [weak self] in
@@ -115,11 +118,16 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
 
     nonisolated private static func resolveDisplayLine(
         musicReader: MusicLyricsReader,
-        accessibilityLyricsReader: MusicLyricsAccessibilityReader
+        accessibilityLyricsReader: MusicLyricsAccessibilityReader,
+        lyricsLineResolver: LyricsLineResolver
     ) -> DisplayResolution {
         switch musicReader.readNowPlaying() {
         case .success(let nowPlaying):
-            return displayLine(for: nowPlaying, accessibilityLyricsReader: accessibilityLyricsReader)
+            return displayLine(
+                for: nowPlaying,
+                accessibilityLyricsReader: accessibilityLyricsReader,
+                lyricsLineResolver: lyricsLineResolver
+            )
         case .failure(let error):
             return .line(error.localizedDescription)
         }
@@ -192,10 +200,11 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
 
     nonisolated private static func displayLine(
         for nowPlaying: NowPlaying,
-        accessibilityLyricsReader: MusicLyricsAccessibilityReader
+        accessibilityLyricsReader: MusicLyricsAccessibilityReader,
+        lyricsLineResolver: LyricsLineResolver
     ) -> DisplayResolution {
         guard nowPlaying.lyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return .line(nowPlaying.displayLine)
+            return .line(lyricsLineResolver.displayLine(for: nowPlaying))
         }
 
         switch accessibilityLyricsReader.readCurrentVisibleLyricLine(for: nowPlaying) {
@@ -216,6 +225,15 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
     private func updateLyricsVisibility() {
         lyricsVisibilityItem?.state = isLyricsVisible ? .on : .off
         updateMenuBarLyricsTitle()
+    }
+
+    private func showPreferencesOnFirstLaunchIfNeeded() {
+        guard UserDefaults.standard.object(forKey: UserDefaultsKey.hasShownPreferencesOnLaunch) == nil else {
+            return
+        }
+
+        UserDefaults.standard.set(true, forKey: UserDefaultsKey.hasShownPreferencesOnLaunch)
+        preferencesWindowController.show()
     }
 
     private func updateMenuBarLyricsTitle() {
@@ -264,4 +282,5 @@ extension MenuBarLyricsApp: PreferencesWindowControllerDelegate {
 
 private enum UserDefaultsKey {
     static let isLyricsVisible = "isLyricsVisible"
+    static let hasShownPreferencesOnLaunch = "hasShownPreferencesOnLaunch"
 }

@@ -154,13 +154,13 @@ struct LyricsLineResolverTests {
             duration: 0
         )
 
-        #expect(resolver.displayLine(for: nowPlaying) == "Song - Artist\nNo lyrics found in Music metadata.")
+        #expect(resolver.displayLine(for: nowPlaying) == "Song - Artist\nMusic 元数据中没有歌词。")
     }
 
     @Test func reportsMissingLyrics() {
         let nowPlaying = makeNowPlaying(lyrics: "", playerPosition: 0, duration: 0)
 
-        #expect(resolver.displayLine(for: nowPlaying) == "Song - Artist\nNo lyrics found in Music metadata.")
+        #expect(resolver.displayLine(for: nowPlaying) == "Song - Artist\nMusic 元数据中没有歌词。")
     }
 
     private func makeNowPlaying(

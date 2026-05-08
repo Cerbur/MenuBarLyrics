@@ -10,11 +10,11 @@ enum MusicLyricsAccessibilityError: LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .permissionRequired:
-            return "Enable Accessibility permission for MenuBarLyrics."
+            return "请为 MenuBarLyrics 开启辅助功能权限。"
         case .musicNotRunning:
-            return "Music.app is not running."
+            return "Music.app 未运行。"
         case .lyricsPanelUnavailable:
-            return "Open the Lyrics panel in Music.app."
+            return "请打开 Music.app 的歌词面板。"
         }
     }
 }
@@ -179,10 +179,8 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
     }
 
     private func selectBestCandidate(from candidates: [TextCandidate], for nowPlaying: NowPlaying) -> String? {
-        let uniqueCandidates = unique(candidates)
+        let lyricPanelCandidates = candidates
             .filter { !isTrackMetadata($0.text, nowPlaying: nowPlaying) }
-
-        let lyricPanelCandidates = uniqueCandidates
             .filter(\.isInLyricsPanel)
             .filter(isVisibleLyricPanelCandidate)
 
@@ -190,15 +188,9 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
             return nil
         }
 
-        if let selected = lyricPanelCandidates
-            .filter({ $0.isSelected || $0.isFocused })
-            .min(by: lyricPanelSort) {
-            return selected.text
-        }
-
-        return lyricPanelCandidates
-            .min(by: lyricPanelSort)?
-            .text
+        let bestCandidate = uniqueByBestCandidateText(lyricPanelCandidates)
+            .min(by: isBetterCandidate)
+        return bestCandidate?.text
     }
 
     private func lyricsPanelFrame(
@@ -225,7 +217,7 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
             stringAttribute(kAXDescriptionAttribute, from: element)
         ].compactMap { $0 }
 
-        return labels.contains("歌词") ? frame : nil
+        return labels.contains(where: isLyricsPanelLabel) ? frame : nil
     }
 
     private func isVisibleLyricPanelCandidate(_ candidate: TextCandidate) -> Bool {
@@ -259,20 +251,50 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
         return lhs.text.count > rhs.text.count
     }
 
-    private func unique(_ candidates: [TextCandidate]) -> [TextCandidate] {
-        var seen = Set<String>()
-        var result: [TextCandidate] = []
+    private func isBetterCandidate(_ lhs: TextCandidate, _ rhs: TextCandidate) -> Bool {
+        let lhsScore = candidateScore(lhs)
+        let rhsScore = candidateScore(rhs)
+        if lhsScore != rhsScore {
+            return lhsScore > rhsScore
+        }
+
+        return lyricPanelSort(lhs, rhs)
+    }
+
+    private func candidateScore(_ candidate: TextCandidate) -> Int {
+        var score = 0
+
+        if candidate.isSelected {
+            score += 100
+        }
+
+        if candidate.isFocused {
+            score += 80
+        }
+
+        if candidate.frame != nil {
+            score += 10
+        }
+
+        return score
+    }
+
+    private func uniqueByBestCandidateText(_ candidates: [TextCandidate]) -> [TextCandidate] {
+        var bestCandidatesByText: [String: TextCandidate] = [:]
 
         for candidate in candidates {
-            guard !seen.contains(candidate.text) else {
+            let key = normalized(candidate.text)
+            guard let existing = bestCandidatesByText[key] else {
+                bestCandidatesByText[key] = candidate
                 continue
             }
 
-            seen.insert(candidate.text)
-            result.append(candidate)
+            if isBetterCandidate(candidate, existing) {
+                bestCandidatesByText[key] = candidate
+            }
         }
 
-        return result
+        return Array(bestCandidatesByText.values)
     }
 
     private func uniqueElements(_ elements: [AXUIElement]) -> [AXUIElement] {
@@ -363,6 +385,10 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
         ].map(normalized)
 
         return metadata.contains(normalizedText)
+    }
+
+    private func isLyricsPanelLabel(_ text: String) -> Bool {
+        ["歌词", "Lyrics"].map(normalized).contains(normalized(text))
     }
 
     private func normalized(_ text: String) -> String {

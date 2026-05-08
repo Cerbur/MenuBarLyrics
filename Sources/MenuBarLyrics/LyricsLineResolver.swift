@@ -1,6 +1,11 @@
 import Foundation
 
-struct LyricsLineResolver {
+final class LyricsLineResolver: @unchecked Sendable {
+    private struct CacheKey: Equatable {
+        let trackID: String
+        let lyrics: String
+    }
+
     private struct TimedLine {
         let time: Double
         let text: String
@@ -11,12 +16,15 @@ struct LyricsLineResolver {
         let timedLines: [TimedLine]
     }
 
+    private var cachedKey: CacheKey?
+    private var cachedLyrics: ParsedLyrics?
+
     func displayLine(for nowPlaying: NowPlaying) -> String {
-        let parsedLyrics = parseLyrics(nowPlaying.lyrics)
+        let parsedLyrics = parsedLyrics(for: nowPlaying)
         let cleanLines = parsedLyrics.fallbackLines
 
         if cleanLines.isEmpty {
-            return "\(nowPlaying.title) - \(nowPlaying.artist)\nNo lyrics found in Music metadata."
+            return "\(nowPlaying.title) - \(nowPlaying.artist)\nMusic 元数据中没有歌词。"
         }
 
         let timedLines = parsedLyrics.timedLines
@@ -31,6 +39,18 @@ struct LyricsLineResolver {
         let progress = min(max(nowPlaying.playerPosition / nowPlaying.duration, 0), 0.999)
         let index = Int(progress * Double(cleanLines.count))
         return cleanLines[min(index, cleanLines.count - 1)]
+    }
+
+    private func parsedLyrics(for nowPlaying: NowPlaying) -> ParsedLyrics {
+        let key = CacheKey(trackID: nowPlaying.trackID, lyrics: nowPlaying.lyrics)
+        if cachedKey == key, let cachedLyrics {
+            return cachedLyrics
+        }
+
+        let parsedLyrics = parseLyrics(nowPlaying.lyrics)
+        cachedKey = key
+        cachedLyrics = parsedLyrics
+        return parsedLyrics
     }
 
     private func line(at playerPosition: Double, from lines: [TimedLine]) -> String {
