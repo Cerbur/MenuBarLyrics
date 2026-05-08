@@ -13,7 +13,7 @@ struct LyricsLineResolver {
             .filter { !$0.isEmpty }
 
         if cleanLines.isEmpty {
-            return "\(nowPlaying.title) - \(nowPlaying.artist)\nNo lyrics found in Music library metadata."
+            return "\(nowPlaying.title) - \(nowPlaying.artist)\nNo lyrics found in Music metadata."
         }
 
         let timedLines = parseTimedLines(from: cleanLines)

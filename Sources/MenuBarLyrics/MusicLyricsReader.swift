@@ -1,9 +1,10 @@
 import Foundation
 
-struct NowPlaying {
+struct NowPlaying: Sendable {
     let trackID: String
     let title: String
     let artist: String
+    let album: String
     let lyrics: String
     let playerPosition: Double
     let duration: Double
@@ -13,7 +14,7 @@ struct NowPlaying {
     }
 }
 
-enum MusicLyricsError: LocalizedError {
+enum MusicLyricsError: LocalizedError, Sendable {
     case musicNotRunning
     case notPlaying
     case missingResult
@@ -33,7 +34,7 @@ enum MusicLyricsError: LocalizedError {
     }
 }
 
-final class MusicLyricsReader {
+final class MusicLyricsReader: @unchecked Sendable {
     private let separator = "\u{1F}"
 
     func readNowPlaying() -> Result<NowPlaying, MusicLyricsError> {
@@ -102,6 +103,7 @@ final class MusicLyricsReader {
                 trackID: "\(title)|\(artist)|\(album)",
                 title: title,
                 artist: artist,
+                album: album,
                 lyrics: lyrics,
                 playerPosition: playerPosition,
                 duration: duration

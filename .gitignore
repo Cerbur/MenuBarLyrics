@@ -13,6 +13,7 @@ xcuserdata/
 *.xcodeproj/xcuserdata/
 
 # macOS app signing and archives
+dist/
 *.xcarchive
 *.ipa
 *.dSYM/
