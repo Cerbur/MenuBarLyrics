@@ -8,6 +8,8 @@
 	<string>MenuBarLyrics</string>
 	<key>CFBundleIdentifier</key>
 	<string>dev.yuancheng.MenuBarLyrics</string>
+	<key>CFBundleIconFile</key>
+	<string>MenuBarLyrics</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>

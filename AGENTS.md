@@ -16,6 +16,8 @@ The app is an early but runnable prototype. Favor small, well-tested changes tha
 - `Sources/MenuBarLyrics/MusicLyricsAccessibilityReader.swift`: Accessibility bridge for reading the visible Music.app lyrics panel when local metadata is empty.
 - `Sources/MenuBarLyrics/LyricsLineResolver.swift`: pure lyric selection logic. This is the safest place to extend parsing behavior.
 - `Sources/MenuBarLyrics/PreferencesWindowController.swift`: AppKit preferences window for user-facing settings.
+- `Scripts/generate-app-icon.swift`: regenerates the packaged macOS `.icns` from code-drawn flat icon artwork.
+- `Packaging/Resources/MenuBarLyrics.icns`: app icon copied into the built bundle.
 - `Tests/MenuBarLyricsTests/LyricsLineResolverTests.swift`: Swift Testing coverage for lyric resolution.
 - `README.md`: user-facing description, requirements, usage, and limitations.
 

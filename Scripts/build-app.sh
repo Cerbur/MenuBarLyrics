@@ -7,6 +7,7 @@ APP_NAME="MenuBarLyrics"
 APP_DIR="$ROOT_DIR/dist/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 
 cd "$ROOT_DIR"
@@ -22,9 +23,18 @@ if [ ! -x "$EXECUTABLE" ]; then
 fi
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp "$ROOT_DIR/Packaging/Info.plist" "$CONTENTS_DIR/Info.plist"
+if [ -d "$ROOT_DIR/Packaging/Resources" ]; then
+	for RESOURCE in "$ROOT_DIR/Packaging/Resources"/*; do
+		[ -e "$RESOURCE" ] || continue
+		case "$RESOURCE" in
+			*.iconset) continue ;;
+		esac
+		cp -R "$RESOURCE" "$RESOURCES_DIR/"
+	done
+fi
 cp "$EXECUTABLE" "$MACOS_DIR/$APP_NAME"
 chmod +x "$MACOS_DIR/$APP_NAME"
 

@@ -1,6 +1,8 @@
 import Testing
 @testable import MenuBarLyrics
 
+// Covers pure lyric selection behavior without launching Music.app or AppKit.
+// 覆盖纯歌词选择逻辑，不需要启动 Music.app 或 AppKit。
 struct LyricsLineResolverTests {
     private let resolver = LyricsLineResolver()
 
@@ -163,6 +165,8 @@ struct LyricsLineResolverTests {
         #expect(resolver.displayLine(for: nowPlaying) == "Song - Artist\nMusic 元数据中没有歌词。")
     }
 
+    // Keep fixture creation explicit so each test only varies the lyric timing inputs it cares about.
+    // 保持测试数据创建清晰，让每个测试只改变自己关心的歌词时间输入。
     private func makeNowPlaying(
         lyrics: String,
         playerPosition: Double,
