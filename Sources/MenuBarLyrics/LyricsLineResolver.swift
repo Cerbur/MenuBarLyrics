@@ -6,17 +6,20 @@ struct LyricsLineResolver {
         let text: String
     }
 
+    private struct ParsedLyrics {
+        let fallbackLines: [String]
+        let timedLines: [TimedLine]
+    }
+
     func displayLine(for nowPlaying: NowPlaying) -> String {
-        let cleanLines = nowPlaying.lyrics
-            .split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        let parsedLyrics = parseLyrics(nowPlaying.lyrics)
+        let cleanLines = parsedLyrics.fallbackLines
 
         if cleanLines.isEmpty {
             return "\(nowPlaying.title) - \(nowPlaying.artist)\nNo lyrics found in Music metadata."
         }
 
-        let timedLines = parseTimedLines(from: cleanLines)
+        let timedLines = parsedLyrics.timedLines
         if !timedLines.isEmpty {
             return line(at: nowPlaying.playerPosition, from: timedLines)
         }
@@ -41,12 +44,22 @@ struct LyricsLineResolver {
         return selected.text
     }
 
-    private func parseTimedLines(from lines: [String]) -> [TimedLine] {
-        lines.flatMap(parseTimedLine)
+    private func parseLyrics(_ lyrics: String) -> ParsedLyrics {
+        let cleanLines = lyrics
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        let offset = parseOffset(from: cleanLines)
+        let timedLines = cleanLines
+            .flatMap { parseTimedLine($0, offset: offset) }
             .sorted { $0.time < $1.time }
+
+        let fallbackLines = cleanLines.filter { !isMetadataLine($0) }
+        return ParsedLyrics(fallbackLines: fallbackLines, timedLines: timedLines)
     }
 
-    private func parseTimedLine(_ line: String) -> [TimedLine] {
+    private func parseTimedLine(_ line: String, offset: Double) -> [TimedLine] {
         var remaining = line[...]
         var timestamps: [Double] = []
 
@@ -65,13 +78,14 @@ struct LyricsLineResolver {
             return []
         }
 
-        return timestamps.map { TimedLine(time: $0, text: text) }
+        return timestamps.map { TimedLine(time: $0 + offset, text: text) }
     }
 
     private func parseTimestamp(_ token: String) -> Double? {
         let parts = token.split(separator: ":", maxSplits: 1)
         guard parts.count == 2,
-              let minutes = Double(parts[0]),
+              let minutes = Int(parts[0]),
+              minutes >= 0,
               let seconds = Double(parts[1]),
               seconds >= 0,
               seconds < 60
@@ -79,6 +93,62 @@ struct LyricsLineResolver {
             return nil
         }
 
-        return minutes * 60 + seconds
+        return Double(minutes * 60) + seconds
+    }
+
+    private func parseOffset(from lines: [String]) -> Double {
+        for line in lines {
+            guard let value = lrcTagValue(named: "offset", in: line),
+                  let milliseconds = Double(value) else {
+                continue
+            }
+
+            return milliseconds / 1_000
+        }
+
+        return 0
+    }
+
+    private func isMetadataLine(_ line: String) -> Bool {
+        guard line.first == "[", line.last == "]" else {
+            return false
+        }
+
+        let token = String(line.dropFirst().dropLast())
+        guard lrcMetadataKey(from: token) != nil else {
+            return false
+        }
+
+        return parseTimestamp(token) == nil
+    }
+
+    private func lrcTagValue(named expectedKey: String, in line: String) -> String? {
+        guard line.first == "[", let end = line.firstIndex(of: "]") else {
+            return nil
+        }
+
+        let token = String(line[line.index(after: line.startIndex)..<end])
+        guard let key = lrcMetadataKey(from: token),
+              key == expectedKey
+        else {
+            return nil
+        }
+
+        return token.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            .dropFirst()
+            .first
+            .map(String.init)
+    }
+
+    private func lrcMetadataKey(from token: String) -> String? {
+        let parts = token.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let key = parts.first?.lowercased(),
+              ["al", "ar", "au", "by", "length", "offset", "re", "ti", "tool", "ve"].contains(key)
+        else {
+            return nil
+        }
+
+        return key
     }
 }
