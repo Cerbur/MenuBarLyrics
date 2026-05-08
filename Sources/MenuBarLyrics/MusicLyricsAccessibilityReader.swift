@@ -25,6 +25,8 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
         let frame: CGRect?
         let isSelected: Bool
         let isFocused: Bool
+        let isInLyricsPanel: Bool
+        let lyricsPanelFrame: CGRect?
     }
 
     private let maximumTraversalDepth = 12
@@ -67,6 +69,7 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
                     depth: 0,
                     inheritedSelection: false,
                     inheritedFocus: false,
+                    lyricsPanelFrame: nil,
                     visitedElements: &visitedElements,
                     remainingNodeBudget: &remainingNodeBudget
                 )
@@ -93,6 +96,7 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
         depth: Int,
         inheritedSelection: Bool,
         inheritedFocus: Bool,
+        lyricsPanelFrame inheritedLyricsPanelFrame: CGRect?,
         visitedElements: inout Set<CFHashCode>,
         remainingNodeBudget: inout Int
     ) -> [TextCandidate] {
@@ -112,15 +116,26 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
         let role = stringAttribute(kAXRoleAttribute, from: element) ?? ""
         let isSelected = inheritedSelection || (boolAttribute(kAXSelectedAttribute, from: element) ?? false)
         let isFocused = inheritedFocus || (boolAttribute(kAXFocusedAttribute, from: element) ?? false)
+        let elementFrame = frame(of: element)
+        let lyricsPanelFrame = self.lyricsPanelFrame(
+            for: element,
+            role: role,
+            frame: elementFrame,
+            inheritedLyricsPanelFrame: inheritedLyricsPanelFrame
+        )
         let text = bestTextValue(from: element, role: role)
 
-        if let text, isPotentialLyricText(text) {
+        if let text,
+           lyricsPanelFrame != nil,
+           isPotentialLyricText(text) {
             candidates.append(
                 TextCandidate(
                     text: text,
-                    frame: frame(of: element),
+                    frame: elementFrame,
                     isSelected: isSelected,
-                    isFocused: isFocused
+                    isFocused: isFocused,
+                    isInLyricsPanel: lyricsPanelFrame != nil,
+                    lyricsPanelFrame: lyricsPanelFrame
                 )
             )
         }
@@ -137,6 +152,7 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
                     depth: depth + 1,
                     inheritedSelection: isSelected,
                     inheritedFocus: isFocused,
+                    lyricsPanelFrame: lyricsPanelFrame,
                     visitedElements: &visitedElements,
                     remainingNodeBudget: &remainingNodeBudget
                 )
@@ -150,9 +166,7 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
         let textRoles = [
             kAXStaticTextRole,
             kAXTextAreaRole,
-            kAXTextFieldRole,
-            kAXButtonRole,
-            kAXGroupRole
+            kAXButtonRole
         ].map { $0 as String }
 
         guard textRoles.contains(role) else {
@@ -168,58 +182,81 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
         let uniqueCandidates = unique(candidates)
             .filter { !isTrackMetadata($0.text, nowPlaying: nowPlaying) }
 
-        if let selected = uniqueCandidates
+        let lyricPanelCandidates = uniqueCandidates
+            .filter(\.isInLyricsPanel)
+            .filter(isVisibleLyricPanelCandidate)
+
+        guard !lyricPanelCandidates.isEmpty else {
+            return nil
+        }
+
+        if let selected = lyricPanelCandidates
             .filter({ $0.isSelected || $0.isFocused })
-            .max(by: { candidateScore($0) < candidateScore($1) }) {
+            .min(by: lyricPanelSort) {
             return selected.text
         }
 
-        let framedCandidates = uniqueCandidates.filter { $0.frame != nil }
-        guard !framedCandidates.isEmpty else {
-            return uniqueCandidates.first?.text
-        }
-
-        let maxX = framedCandidates.compactMap(\.frame?.maxX).max() ?? 0
-        let minY = framedCandidates.compactMap(\.frame?.minY).min() ?? 0
-        let maxY = framedCandidates.compactMap(\.frame?.maxY).max() ?? 0
-        let verticalCenter = (minY + maxY) / 2
-
-        return framedCandidates
-            .filter { candidate in
-                guard let frame = candidate.frame else {
-                    return false
-                }
-
-                return frame.midX >= maxX * 0.65
-            }
-            .max { lhs, rhs in
-                candidateScore(lhs, verticalCenter: verticalCenter) < candidateScore(rhs, verticalCenter: verticalCenter)
-            }?
+        return lyricPanelCandidates
+            .min(by: lyricPanelSort)?
             .text
-            ?? framedCandidates.first?.text
     }
 
-    private func candidateScore(_ candidate: TextCandidate, verticalCenter: CGFloat? = nil) -> Double {
-        var score = 0.0
-
-        if candidate.isSelected {
-            score += 1_000
+    private func lyricsPanelFrame(
+        for element: AXUIElement,
+        role: String,
+        frame: CGRect?,
+        inheritedLyricsPanelFrame: CGRect?
+    ) -> CGRect? {
+        if let inheritedLyricsPanelFrame {
+            return inheritedLyricsPanelFrame
         }
 
-        if candidate.isFocused {
-            score += 100
+        guard role == (kAXGroupRole as String),
+              let frame,
+              frame.width >= 160,
+              frame.height >= 300
+        else {
+            return nil
         }
 
-        if let frame = candidate.frame {
-            score += min(Double(frame.minX), 3_000) / 10
-            score += min(Double(frame.width), 400) / 40
+        let labels = [
+            stringAttribute(kAXValueAttribute, from: element),
+            stringAttribute(kAXTitleAttribute, from: element),
+            stringAttribute(kAXDescriptionAttribute, from: element)
+        ].compactMap { $0 }
 
-            if let verticalCenter {
-                score -= abs(Double(frame.midY - verticalCenter)) / 100
-            }
+        return labels.contains("歌词") ? frame : nil
+    }
+
+    private func isVisibleLyricPanelCandidate(_ candidate: TextCandidate) -> Bool {
+        guard let frame = candidate.frame,
+              let panelFrame = candidate.lyricsPanelFrame
+        else {
+            return false
         }
 
-        return score
+        guard frame.width >= panelFrame.width * 0.45,
+              frame.height >= 12,
+              frame.minX >= panelFrame.minX,
+              frame.maxX <= panelFrame.maxX + 1
+        else {
+            return false
+        }
+
+        let topInset: CGFloat = 44
+        let bottomInset: CGFloat = 80
+        return frame.minY >= panelFrame.minY + topInset
+            && frame.maxY <= panelFrame.maxY - bottomInset
+    }
+
+    private func lyricPanelSort(_ lhs: TextCandidate, _ rhs: TextCandidate) -> Bool {
+        let lhsMinY = lhs.frame?.minY ?? .greatestFiniteMagnitude
+        let rhsMinY = rhs.frame?.minY ?? .greatestFiniteMagnitude
+        if lhsMinY != rhsMinY {
+            return lhsMinY < rhsMinY
+        }
+
+        return lhs.text.count > rhs.text.count
     }
 
     private func unique(_ candidates: [TextCandidate]) -> [TextCandidate] {
@@ -259,26 +296,62 @@ final class MusicLyricsAccessibilityReader: @unchecked Sendable {
             return false
         }
 
+        guard !isTimeLikeText(trimmedText),
+              !isOnlyPunctuation(trimmedText)
+        else {
+            return false
+        }
+
         let ignoredValues = [
             "Music",
             "Lyrics",
             "歌词",
             "翻译",
+            "Search",
+            "搜索",
             "Playing Next",
             "待播清单",
             "Listen Now",
+            "现在就听",
             "Browse",
+            "浏览",
             "Radio",
+            "广播",
             "Library",
+            "资料库",
             "Recently Added",
+            "最近添加",
             "Artists",
+            "艺人",
             "Albums",
+            "专辑",
             "Songs",
+            "歌曲",
             "歌曲排行",
-            "Made for You"
-        ]
+            "Made for You",
+            "为你打造"
+        ].map(normalized)
 
-        return !ignoredValues.contains(trimmedText)
+        return !ignoredValues.contains(normalized(trimmedText))
+    }
+
+    private func isTimeLikeText(_ text: String) -> Bool {
+        let parts = text.split(separator: ":")
+        guard parts.count == 2 || parts.count == 3 else {
+            return false
+        }
+
+        return parts.allSatisfy { part in
+            !part.isEmpty && part.allSatisfy(\.isNumber)
+        }
+    }
+
+    private func isOnlyPunctuation(_ text: String) -> Bool {
+        text.unicodeScalars.allSatisfy { scalar in
+            CharacterSet.whitespacesAndNewlines.contains(scalar)
+                || CharacterSet.punctuationCharacters.contains(scalar)
+                || CharacterSet.symbols.contains(scalar)
+        }
     }
 
     private func isTrackMetadata(_ text: String, nowPlaying: NowPlaying) -> Bool {

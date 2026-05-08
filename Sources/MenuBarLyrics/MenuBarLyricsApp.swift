@@ -17,6 +17,11 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
     private var latestDisplayLine: String?
     private var lyricsVisibilityItem: NSMenuItem!
 
+    private enum DisplayResolution: Sendable {
+        case line(String)
+        case keepCurrentLine
+    }
+
     private var isLyricsVisible: Bool {
         get {
             if UserDefaults.standard.object(forKey: UserDefaultsKey.isLyricsVisible) == nil {
@@ -86,7 +91,7 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
         let accessibilityLyricsReader = accessibilityLyricsReader
 
         pollingQueue.async { [weak self, musicReader, accessibilityLyricsReader] in
-            let resolvedDisplayLine = Self.resolveDisplayLine(
+            let displayResolution = Self.resolveDisplayLine(
                 musicReader: musicReader,
                 accessibilityLyricsReader: accessibilityLyricsReader
             )
@@ -97,7 +102,7 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
                 }
 
                 self.isRefreshInFlight = false
-                self.applyDisplayLine(resolvedDisplayLine)
+                self.applyDisplayResolution(displayResolution)
 
                 if self.needsRefreshAfterCurrentRefresh {
                     self.needsRefreshAfterCurrentRefresh = false
@@ -110,16 +115,20 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
     nonisolated private static func resolveDisplayLine(
         musicReader: MusicLyricsReader,
         accessibilityLyricsReader: MusicLyricsAccessibilityReader
-    ) -> String {
+    ) -> DisplayResolution {
         switch musicReader.readNowPlaying() {
         case .success(let nowPlaying):
             return displayLine(for: nowPlaying, accessibilityLyricsReader: accessibilityLyricsReader)
         case .failure(let error):
-            return error.localizedDescription
+            return .line(error.localizedDescription)
         }
     }
 
-    private func applyDisplayLine(_ resolvedDisplayLine: String) {
+    private func applyDisplayResolution(_ displayResolution: DisplayResolution) {
+        guard case .line(let resolvedDisplayLine) = displayResolution else {
+            return
+        }
+
         guard resolvedDisplayLine != latestDisplayLine else {
             return
         }
@@ -175,16 +184,21 @@ final class MenuBarLyricsApp: NSObject, NSApplicationDelegate {
     nonisolated private static func displayLine(
         for nowPlaying: NowPlaying,
         accessibilityLyricsReader: MusicLyricsAccessibilityReader
-    ) -> String {
+    ) -> DisplayResolution {
         guard nowPlaying.lyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nowPlaying.displayLine
+            return .line(nowPlaying.displayLine)
         }
 
         switch accessibilityLyricsReader.readCurrentVisibleLyricLine(for: nowPlaying) {
         case .success(let line):
-            return line
+            return .line(line)
         case .failure(let error):
-            return error.localizedDescription
+            switch error {
+            case .permissionRequired, .musicNotRunning:
+                return .line(error.localizedDescription)
+            case .lyricsPanelUnavailable:
+                return .keepCurrentLine
+            }
         }
     }
 

@@ -29,7 +29,7 @@ Scripts/build-app.sh
 swift run
 ```
 
-Run `swift test` before finishing changes that touch lyric parsing, data modeling, or other testable logic. After any code or app-facing behavior change, run `Scripts/build-app.sh` so the latest build is copied into `dist/MenuBarLyrics.app` for direct manual checking. `swift run` launches a real macOS app and may require Music.app plus Automation permissions, so use it only when interactive verification is useful.
+Run `swift test` before finishing changes that touch lyric parsing, data modeling, or other testable logic. After any code or app-facing behavior change, run `Scripts/build-app.sh` so the latest build is copied into `dist/MenuBarLyrics.app` for direct manual checking. After rebuilding the app bundle, always include a clickable Finder link to `dist/MenuBarLyrics.app` in the final response. `swift run` launches a real macOS app and may require Music.app plus Automation permissions, so use it only when interactive verification is useful.
 
 ## Runtime And Permission Notes
 
